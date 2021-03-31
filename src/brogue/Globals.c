@@ -1567,15 +1567,16 @@ const blueprint blueprintCatalog[NUMBER_BLUEPRINTS] = {
 
 // Defines all creatures, which include monsters and the player:
 creatureType monsterCatalog[NUMBER_MONSTER_KINDS] = {
-    //  name            ch      color           HP      def     acc     damage          reg move    attack  blood           light isLarge     DFChance DFType         bolts       behaviorF, abilityF
+    //  name            ch      color           HP      def     acc     damage          reg move    attack  blood           light isLarge     DFChance DFType         bolts
+    //  behaviorAbilityF
     {0, "you",  G_PLAYER,       &playerInLightColor,30, 0,      100,    {1, 2, 1},      20, 100,    100,    DF_RED_BLOOD,   0,    false,      0,      0,              {0},
         (MONST_MALE | MONST_FEMALE)},
 
     {0, "rat",          G_RAT,    &gray,          6,      0,      80,     {1, 3, 1},      20, 100,    100,    DF_RED_BLOOD,   0,    false,      1,      DF_URINE,       {0}},
     {0, "kobold",       G_KOBOLD,    &goblinColor,   7,      0,      80,     {1, 4, 1},      20, 100,    100,    DF_RED_BLOOD,   0,    false,      0,      0,              {0}},
-    {0, "jackal",       G_JACKAL,    &jackalColor,   8,      0,      70,     {2, 4, 1},      20, 50,     100,    DF_RED_BLOOD,   0,    false,      1,      DF_URINE,              {0}},
-    {0, "eel",          G_EEL,    &eelColor,      18,     27,     100,    {3, 7, 2},      5,  50,     100,    0,              0,    false,      0,      0,              {0},
-        (MONST_RESTRICTED_TO_LIQUID | MONST_IMMUNE_TO_WATER | MONST_SUBMERGES | MONST_FLITS | MONST_NEVER_SLEEPS)},
+    {0, "jackal",       G_JACKAL,    &jackalColor,   8,      0,      70,     {2, 4, 1},      20, 50,     100,    DF_RED_BLOOD,   0,    false,      1,      DF_URINE,  {0}},
+    {0, "eel",          G_EEL,  &eelColor,      30,     0,      70,     {7, 20, 3},     5,  125,    100,    0,              0,    false,      0,       0,             {0},
+        (MONST_RESTRICTED_TO_LIQUID | MONST_IMMUNE_TO_WATER | MONST_SUBMERGES | MONST_NEVER_SLEEPS)},
     {0, "monkey",       G_MONKEY,    &ogreColor,     12,     17,     100,    {1, 3, 1},      20, 100,    100,    DF_RED_BLOOD,   0,    false,      1,      DF_URINE,       {0},
         (0), (MA_HIT_STEAL_FLEE)},
     {0, "bloat",        G_BLOAT,    &poisonGasColor,4,      0,      100,    {0, 0, 0},      5,  100,    100,    DF_PURPLE_BLOOD,0,    false,      0,      DF_BLOAT_DEATH, {0},
@@ -1958,12 +1959,14 @@ const mutation mutationCatalog[NUMBER_MUTATORS] = {
 };
 
 const hordeType hordeCatalog[NUMBER_HORDES] = {
-    // leader       #members    member list                             member numbers                  minL    maxL    freq    spawnsIn        machine         flags
+    // leader           #membrs member_list                             member_numbers                  minL    maxL    freq    spawnsIn        machine         flags
     {MK_RAT,            0,      {0},                                    {{0}},                          1,      5,      150},
     {MK_KOBOLD,         0,      {0},                                    {{0}},                          1,      6,      150},
     {MK_JACKAL,         0,      {0},                                    {{0}},                          1,      3,      100},
     {MK_JACKAL,         1,      {MK_JACKAL},                            {{1, 3, 1}},                    3,      7,      50},
-    {MK_EEL,            0,      {0},                                    {{0}},                          2,      17,     100,        DEEP_WATER},
+    {MK_EEL,            0,      {0},                                    {{0}},                          2,      5,      70,     DEEP_WATER},
+    {MK_EEL,            0,      {0},                                    {{0}},                          6,      17,     100,    DEEP_WATER},
+    {MK_EEL,            1,      {MK_EEL},                               {{2, 4, 1}},                    8,      22,     70,     DEEP_WATER},
     {MK_MONKEY,         0,      {0},                                    {{0}},                          2,      9,      50},
     {MK_BLOAT,          0,      {0},                                    {{0}},                          2,      13,     30},
     {MK_PIT_BLOAT,      0,      {0},                                    {{0}},                          2,      13,     10},
@@ -1985,7 +1988,6 @@ const hordeType hordeCatalog[NUMBER_HORDES] = {
     {MK_CENTIPEDE,      0,      {0},                                    {{0}},                          7,      14,     100},
     {MK_BOG_MONSTER,    0,      {0},                                    {{0}},                          7,      14,     80,     MUD,            0,              HORDE_NEVER_OOD},
     {MK_OGRE,           0,      {0},                                    {{0}},                          7,      13,     100},
-    {MK_EEL,            1,      {MK_EEL},                               {{2, 4, 1}},                    8,      22,     70,     DEEP_WATER},
     {MK_ACID_MOUND,     1,      {MK_ACID_MOUND},                        {{2, 4, 1}},                    9,      13,     30},
     {MK_SPIDER,         0,      {0},                                    {{0}},                          9,      16,     100},
     {MK_DAR_BLADEMASTER,1,      {MK_DAR_BLADEMASTER},                   {{0, 1, 1}},                    10,     14,     100},
@@ -2066,10 +2068,10 @@ const hordeType hordeCatalog[NUMBER_HORDES] = {
     {MK_FLAMEDANCER,    0,      {0},                                    {{0}},                          10,     DEEPEST_LEVEL,  50,  0,     0,                  HORDE_MACHINE_BOSS},
 
     // machine water monsters
-    {MK_EEL,            0,      {0},                                    {{0}},                          2,      7,      100,        DEEP_WATER, 0,                  HORDE_MACHINE_WATER_MONSTER},
-    {MK_EEL,            1,      {MK_EEL},                               {{2, 4, 1}},                    5,      15,     100,        DEEP_WATER, 0,                  HORDE_MACHINE_WATER_MONSTER},
-    {MK_KRAKEN,         0,      {0},                                    {{0}},                          12,     DEEPEST_LEVEL,  100,    DEEP_WATER, 0,              HORDE_MACHINE_WATER_MONSTER},
-    {MK_KRAKEN,         1,      {MK_EEL},                               {{1, 2, 1}},                    12,     DEEPEST_LEVEL,  80, DEEP_WATER, 0,              HORDE_MACHINE_WATER_MONSTER},
+    {MK_EEL,            0,      {0},                                    {{0}},                          2,      7,      100,    DEEP_WATER,     0,              HORDE_MACHINE_WATER_MONSTER},
+    {MK_EEL,            1,      {MK_EEL},                               {{2, 4, 1}},                    8,      15,     100,    DEEP_WATER,     0,              HORDE_MACHINE_WATER_MONSTER},
+    {MK_KRAKEN,         0,      {0},                                    {{0}},                          12,     DEEPEST_LEVEL, 100, DEEP_WATER, 0,              HORDE_MACHINE_WATER_MONSTER},
+    {MK_KRAKEN,         1,      {MK_EEL},                               {{1, 2, 1}},                    12,     DEEPEST_LEVEL, 80, DEEP_WATER,  0,              HORDE_MACHINE_WATER_MONSTER},
 
     // dungeon captives -- no captors
     {MK_OGRE,           0,      {0},                                    {{0}},                          4,      13,     100,        0,          0,                  HORDE_MACHINE_CAPTIVE | HORDE_LEADER_CAPTIVE},
