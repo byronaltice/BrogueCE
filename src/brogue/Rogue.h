@@ -2129,6 +2129,11 @@ typedef struct monsterClass {
     enum monsterTypes memberList[15];
 } monsterClass;
 
+typedef struct creatureList {
+    struct creature *creature;
+    struct creatureList *next;   
+} creatureList;
+
 typedef struct creature {
     creatureType info;
     short xLoc;
@@ -2181,6 +2186,8 @@ typedef struct creature {
     struct creature *carriedMonster;    // when vampires turn into bats, one of the bats restores the vampire when it dies
     struct creature *nextCreature;
     struct item *carriedItem;           // only used for monsters
+
+    boolean uiFlash                     // monster needs to be extra visible on the UI this turn, different from flashStrength/flashColor 
 } creature;
 
 enum NGCommands {
@@ -2762,6 +2769,8 @@ extern "C" {
     void overlayDisplayBuffer(cellDisplayBuffer overBuf[COLS][ROWS], cellDisplayBuffer previousBuf[COLS][ROWS]);
     void flashForeground(short *x, short *y, color **flashColor, short *flashStrength, short count, short frames);
     void flashCell(color *theColor, short frames, short x, short y);
+    void highlightCellTemporarily(color *theColor, short frames, short x, short y);
+    void darkenColor(color *theColor, short percentage);
     void colorFlash(const color *theColor, unsigned long reqTerrainFlags, unsigned long reqTileFlags, short frames, short maxRadius, short x, short y);
     void printString(const char *theString, short x, short y, color *foreColor, color*backColor, cellDisplayBuffer dbuf[COLS][ROWS]);
     short wrapText(char *to, const char *sourceText, short width);
