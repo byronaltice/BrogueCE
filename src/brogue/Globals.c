@@ -46,10 +46,10 @@ item *packItems;
 item *monsterItemsHopper;
 
 char displayedMessage[MESSAGE_LINES][COLS*2];
-boolean messageConfirmed[MESSAGE_LINES];
+short messagesUnconfirmed;
 char combatText[COLS * 2];
 short messageArchivePosition;
-char messageArchive[MESSAGE_ARCHIVE_LINES][COLS*2];
+archivedMessage messageArchive[MESSAGE_ARCHIVE_ENTRIES];
 
 char currentFilePath[BROGUE_FILENAME_MAX];
 
@@ -590,7 +590,7 @@ const floorTileType tileCatalog[NUMBER_TILETYPES] = {
     {G_GRASS,    &fungusForestLightColor,0,               60, 15, DF_PLAIN_FIRE,  0,          DF_FUNGUS_FOREST_REGROW, 100,   FUNGUS_LIGHT,   (T_IS_FLAMMABLE), (TM_VANISHES_UPON_PROMOTION),                                                     "trampled fungal foliage", "luminescent fungal growth fills the area, groping upward from the rich soil."},
     {G_CRYSTAL,  &forceFieldColor,       &forceFieldColor,       0,  0,  0,              0,          DF_FORCEFIELD_MELT, -200,       FORCEFIELD_LIGHT, (T_OBSTRUCTS_PASSABILITY | T_OBSTRUCTS_GAS | T_OBSTRUCTS_DIAGONAL_MOVEMENT), (TM_STAND_IN_TILE | TM_VANISHES_UPON_PROMOTION | TM_PROMOTES_ON_STEP),       "a green crystal",      "The translucent green crystal is melting away in front of your eyes."},
     {G_CRYSTAL,  &black,                 &forceFieldColor,       0,  0,  0,              0,          0,              -10000,         FORCEFIELD_LIGHT, (T_OBSTRUCTS_PASSABILITY | T_OBSTRUCTS_GAS | T_OBSTRUCTS_DIAGONAL_MOVEMENT), (TM_STAND_IN_TILE | TM_VANISHES_UPON_PROMOTION),     "a dissolving crystal",     "The translucent green crystal is melting away in front of your eyes."},
-    {G_MAGIC_GLYPH,    &sacredGlyphColor,      0,                      57, 0,  0,              0,          0,              0,              SACRED_GLYPH_LIGHT, (T_SACRED), 0,                                                                                  "a sacred glyph",       "a sacred glyph adorns the floor, glowing with a powerful warding enchantment."},
+    {G_MAGIC_GLYPH,    &sacredGlyphColor,      0,                      7, 0,  0,              0,          0,              0,              SACRED_GLYPH_LIGHT, (T_SACRED), 0,                                                                                  "a sacred glyph",       "a sacred glyph adorns the floor, glowing with a powerful warding enchantment."},
     {G_CHAIN_TOP_LEFT,&gray,                  0,                      20, 0,  0,              0,          0,              0,              NO_LIGHT,       0, 0,                                                                                               "an iron manacle",      "a thick iron manacle is anchored to the ceiling."},
     {G_CHAIN_BOTTOM_RIGHT, &gray,             0,                      20, 0,  0,              0,          0,              0,              NO_LIGHT,       0, 0,                                                                                               "an iron manacle",      "a thick iron manacle is anchored to the floor."},
     {G_CHAIN_TOP_RIGHT, &gray,                0,                      20, 0,  0,              0,          0,              0,              NO_LIGHT,       0, 0,                                                                                               "an iron manacle",      "a thick iron manacle is anchored to the ceiling."},
@@ -654,7 +654,7 @@ const floorTileType tileCatalog[NUMBER_TILETYPES] = {
     {0,             0,                      0,                      95, 0,  0,              0,          0,              0,              NO_LIGHT,       (0), (TM_IS_WIRED | TM_PROMOTES_ON_PLAYER_ENTRY),                                                   "the ground",           ""},
 
     // sacrifice altar
-    {G_SAC_ALTAR, &altarForeColor,        &altarBackColor,        17, 0,  0,              0,          DF_SACRIFICE_ALTAR,0,           CANDLE_LIGHT,   (T_OBSTRUCTS_SURFACE_EFFECTS), (TM_VANISHES_UPON_PROMOTION | TM_IS_WIRED | TM_LIST_IN_SIDEBAR | TM_VISUALLY_DISTINCT), "a sacrifice altar", "demonological symbols decorate this altar."},
+    {G_SAC_ALTAR, &altarForeColor,        &altarBackColor,        17, 0,  0,              0,          DF_SACRIFICE_ALTAR,0,           CANDLE_LIGHT,   (T_OBSTRUCTS_SURFACE_EFFECTS), (TM_VANISHES_UPON_PROMOTION | TM_IS_WIRED | TM_LIST_IN_SIDEBAR | TM_VISUALLY_DISTINCT), "a sacrificial altar", "demonological symbols decorate this altar."},
     {G_SAC_ALTAR, &altarForeColor,        &altarBackColor,        17, 0,  0,              0,          DF_SACRIFICE_COMPLETE,0,        CANDLE_LIGHT,   (T_OBSTRUCTS_SURFACE_EFFECTS), (TM_VANISHES_UPON_PROMOTION | TM_IS_WIRED | TM_LIST_IN_SIDEBAR | TM_VISUALLY_DISTINCT | TM_PROMOTES_ON_SACRIFICE_ENTRY), "a sacrifice altar",    "demonological symbols decorate this altar."},
     {G_LIQUID,   &fireForeColor,         &lavaBackColor,         40, 0,  DF_OBSIDIAN,    0,          0,              0,              LAVA_LIGHT,     (T_LAVA_INSTA_DEATH), (TM_ALLOWS_SUBMERGING | TM_LIST_IN_SIDEBAR),                                  "a sacrificial pit",      "the smell of burnt flesh lingers over this pit of lava."},
     {G_WALL,     &altarBackColor,        &veryDarkGray,          17, 0,  0,              0,          DF_SACRIFICE_CAGE_ACTIVE,   0,  CANDLE_LIGHT,   (T_OBSTRUCTS_PASSABILITY | T_OBSTRUCTS_SURFACE_EFFECTS), (TM_STAND_IN_TILE | TM_VANISHES_UPON_PROMOTION | TM_IS_WIRED | TM_LIST_IN_SIDEBAR | TM_VISUALLY_DISTINCT),"an iron cage","the cage won't budge. Perhaps there is a way to raise it nearby..."},
@@ -767,7 +767,7 @@ dungeonFeature dungeonFeatureCatalog[NUMBER_DUNGEON_FEATURES] = {
     {ECTOPLASM,                 SURFACE,    0,      0,      0},
     {FORCEFIELD,                SURFACE,    100,    50,     0},
     {FORCEFIELD_MELT,           SURFACE,    0,      0,      0},
-    {SACRED_GLYPH,              LIQUID,     100,    100,    0,  "", EMPOWERMENT_LIGHT},
+    {SACRED_GLYPH,              SURFACE,    100,    100,    0,  "", EMPOWERMENT_LIGHT},
     {LICHEN,                    SURFACE,    2,      100,    (DFF_BLOCKED_BY_OTHER_LAYERS)}, // Lichen won't spread through lava.
     {RUBBLE,                    SURFACE,    45,     23,     (DFF_ACTIVATE_DORMANT_MONSTER)},
     {RUBBLE,                    SURFACE,    0,      0,      (DFF_ACTIVATE_DORMANT_MONSTER)},
@@ -890,10 +890,10 @@ dungeonFeature dungeonFeatureCatalog[NUMBER_DUNGEON_FEATURES] = {
 
     // resurrection altars
     {RESURRECTION_ALTAR_INERT,  DUNGEON,    0,      0,      DFF_RESURRECT_ALLY, "An old friend emerges from a bloom of sacred light!", EMPOWERMENT_LIGHT},
-    {MACHINE_TRIGGER_FLOOR_REPEATING, LIQUID, 300,  100,    DFF_SUPERPRIORITY},
+    {MACHINE_TRIGGER_FLOOR_REPEATING, LIQUID, 300,  100,    DFF_SUPERPRIORITY, "", 0, 0, 0, CARPET},
 
     // sacrifice altars
-    {SACRIFICE_ALTAR,           DUNGEON,    0,      0,      0,  "a demonic presence whispers its demand: \"bring to me the marked sacrifice!\""},
+    {SACRIFICE_ALTAR,           DUNGEON,    0,      0,      0,  "a demonic presence whispers its demand: \"Bring to me the marked sacrifice!\""},
     {SACRIFICE_LAVA,            DUNGEON,    0,      0,      0,  "demonic cackling echoes through the room as the altar plunges downward!"},
     {ALTAR_CAGE_RETRACTABLE,    DUNGEON,    0,      0,      0},
 
@@ -1172,7 +1172,7 @@ const blueprint blueprintCatalog[NUMBER_BLUEPRINTS] = {
     {{13, AMULET_LEVEL},{10, 30},   30,     4,          0,                  (BP_ROOM | BP_PURGE_INTERIOR | BP_SURROUND_WITH_WALLS | BP_OPEN_INTERIOR | BP_IMPREGNABLE | BP_REWARD), {
         {0,         CARPET,     DUNGEON,        {0,0},      0,          0,          -1,         0,              0,              0,          0,          (MF_EVERYWHERE)},
         {0,         STATUE_INERT,DUNGEON,       {1,3},      0,          0,          -1,         0,              2,              0,          0,          (MF_TREAT_AS_BLOCKING | MF_BUILD_IN_WALLS | MF_IMPREGNABLE)},
-        {DF_MACHINE_FLOOR_TRIGGER_REPEATING, RESURRECTION_ALTAR,DUNGEON, {1,1}, 1, 0, -1,       0,              2,              0,          0,          (MF_TREAT_AS_BLOCKING)},
+        {DF_MACHINE_FLOOR_TRIGGER_REPEATING, RESURRECTION_ALTAR,DUNGEON, {1,1}, 1, 0, -1,       0,              2,              0,          0,          (MF_TREAT_AS_BLOCKING | MF_FAR_FROM_ORIGIN)},
         {0,         0,          0,              {1,1},      1,          0,          0,          0,              2,              0,          0,          (MF_BUILD_AT_ORIGIN | MF_PERMIT_BLOCKING | MF_BUILD_VESTIBULE)}}},
     // Outsourced item -- same item possibilities as in the good permanent item reward room (plus charms), but directly adopted by 1-2 key machines.
     {{5, 17},           {0, 0},     20,     4,          0,                  (BP_REWARD | BP_NO_INTERIOR_FLAG),  {
@@ -1567,15 +1567,16 @@ const blueprint blueprintCatalog[NUMBER_BLUEPRINTS] = {
 
 // Defines all creatures, which include monsters and the player:
 creatureType monsterCatalog[NUMBER_MONSTER_KINDS] = {
-    //  name            ch      color           HP      def     acc     damage          reg move    attack  blood           light isLarge     DFChance DFType         bolts       behaviorF, abilityF
+    //  name            ch      color           HP      def     acc     damage          reg move    attack  blood           light isLarge     DFChance DFType         bolts
+    //  behaviorAbilityF
     {0, "you",  G_PLAYER,       &playerInLightColor,30, 0,      100,    {1, 2, 1},      20, 100,    100,    DF_RED_BLOOD,   0,    false,      0,      0,              {0},
         (MONST_MALE | MONST_FEMALE)},
 
     {0, "rat",          G_RAT,    &gray,          6,      0,      80,     {1, 3, 1},      20, 100,    100,    DF_RED_BLOOD,   0,    false,      1,      DF_URINE,       {0}},
     {0, "kobold",       G_KOBOLD,    &goblinColor,   7,      0,      80,     {1, 4, 1},      20, 100,    100,    DF_RED_BLOOD,   0,    false,      0,      0,              {0}},
-    {0, "jackal",       G_JACKAL,    &jackalColor,   8,      0,      70,     {2, 4, 1},      20, 50,     100,    DF_RED_BLOOD,   0,    false,      1,      DF_URINE,              {0}},
-    {0, "eel",          G_EEL,    &eelColor,      18,     27,     100,    {3, 7, 2},      5,  50,     100,    0,              0,    false,      0,      0,              {0},
-        (MONST_RESTRICTED_TO_LIQUID | MONST_IMMUNE_TO_WATER | MONST_SUBMERGES | MONST_FLITS | MONST_NEVER_SLEEPS)},
+    {0, "jackal",       G_JACKAL,    &jackalColor,   8,      0,      70,     {2, 4, 1},      20, 50,     100,    DF_RED_BLOOD,   0,    false,      1,      DF_URINE,  {0}},
+    {0, "eel",          G_EEL,  &eelColor,      30,     0,      70,     {7, 20, 3},     5,  125,    100,    0,              0,    false,      0,       0,             {0},
+        (MONST_RESTRICTED_TO_LIQUID | MONST_IMMUNE_TO_WATER | MONST_SUBMERGES | MONST_NEVER_SLEEPS)},
     {0, "monkey",       G_MONKEY,    &ogreColor,     12,     17,     100,    {1, 3, 1},      20, 100,    100,    DF_RED_BLOOD,   0,    false,      1,      DF_URINE,       {0},
         (0), (MA_HIT_STEAL_FLEE)},
     {0, "bloat",        G_BLOAT,    &poisonGasColor,4,      0,      100,    {0, 0, 0},      5,  100,    100,    DF_PURPLE_BLOOD,0,    false,      0,      DF_BLOAT_DEATH, {0},
@@ -1958,12 +1959,14 @@ const mutation mutationCatalog[NUMBER_MUTATORS] = {
 };
 
 const hordeType hordeCatalog[NUMBER_HORDES] = {
-    // leader       #members    member list                             member numbers                  minL    maxL    freq    spawnsIn        machine         flags
+    // leader           #membrs member_list                             member_numbers                  minL    maxL    freq    spawnsIn        machine         flags
     {MK_RAT,            0,      {0},                                    {{0}},                          1,      5,      150},
     {MK_KOBOLD,         0,      {0},                                    {{0}},                          1,      6,      150},
     {MK_JACKAL,         0,      {0},                                    {{0}},                          1,      3,      100},
     {MK_JACKAL,         1,      {MK_JACKAL},                            {{1, 3, 1}},                    3,      7,      50},
-    {MK_EEL,            0,      {0},                                    {{0}},                          2,      17,     100,        DEEP_WATER},
+    {MK_EEL,            0,      {0},                                    {{0}},                          2,      5,      70,     DEEP_WATER},
+    {MK_EEL,            0,      {0},                                    {{0}},                          6,      17,     100,    DEEP_WATER},
+    {MK_EEL,            1,      {MK_EEL},                               {{2, 4, 1}},                    8,      22,     70,     DEEP_WATER},
     {MK_MONKEY,         0,      {0},                                    {{0}},                          2,      9,      50},
     {MK_BLOAT,          0,      {0},                                    {{0}},                          2,      13,     30},
     {MK_PIT_BLOAT,      0,      {0},                                    {{0}},                          2,      13,     10},
@@ -1985,7 +1988,6 @@ const hordeType hordeCatalog[NUMBER_HORDES] = {
     {MK_CENTIPEDE,      0,      {0},                                    {{0}},                          7,      14,     100},
     {MK_BOG_MONSTER,    0,      {0},                                    {{0}},                          7,      14,     80,     MUD,            0,              HORDE_NEVER_OOD},
     {MK_OGRE,           0,      {0},                                    {{0}},                          7,      13,     100},
-    {MK_EEL,            1,      {MK_EEL},                               {{2, 4, 1}},                    8,      22,     70,     DEEP_WATER},
     {MK_ACID_MOUND,     1,      {MK_ACID_MOUND},                        {{2, 4, 1}},                    9,      13,     30},
     {MK_SPIDER,         0,      {0},                                    {{0}},                          9,      16,     100},
     {MK_DAR_BLADEMASTER,1,      {MK_DAR_BLADEMASTER},                   {{0, 1, 1}},                    10,     14,     100},
@@ -2066,10 +2068,10 @@ const hordeType hordeCatalog[NUMBER_HORDES] = {
     {MK_FLAMEDANCER,    0,      {0},                                    {{0}},                          10,     DEEPEST_LEVEL,  50,  0,     0,                  HORDE_MACHINE_BOSS},
 
     // machine water monsters
-    {MK_EEL,            0,      {0},                                    {{0}},                          2,      7,      100,        DEEP_WATER, 0,                  HORDE_MACHINE_WATER_MONSTER},
-    {MK_EEL,            1,      {MK_EEL},                               {{2, 4, 1}},                    5,      15,     100,        DEEP_WATER, 0,                  HORDE_MACHINE_WATER_MONSTER},
-    {MK_KRAKEN,         0,      {0},                                    {{0}},                          12,     DEEPEST_LEVEL,  100,    DEEP_WATER, 0,              HORDE_MACHINE_WATER_MONSTER},
-    {MK_KRAKEN,         1,      {MK_EEL},                               {{1, 2, 1}},                    12,     DEEPEST_LEVEL,  80, DEEP_WATER, 0,              HORDE_MACHINE_WATER_MONSTER},
+    {MK_EEL,            0,      {0},                                    {{0}},                          2,      7,      100,    DEEP_WATER,     0,              HORDE_MACHINE_WATER_MONSTER},
+    {MK_EEL,            1,      {MK_EEL},                               {{2, 4, 1}},                    8,      15,     100,    DEEP_WATER,     0,              HORDE_MACHINE_WATER_MONSTER},
+    {MK_KRAKEN,         0,      {0},                                    {{0}},                          12,     DEEPEST_LEVEL, 100, DEEP_WATER, 0,              HORDE_MACHINE_WATER_MONSTER},
+    {MK_KRAKEN,         1,      {MK_EEL},                               {{1, 2, 1}},                    12,     DEEPEST_LEVEL, 80, DEEP_WATER,  0,              HORDE_MACHINE_WATER_MONSTER},
 
     // dungeon captives -- no captors
     {MK_OGRE,           0,      {0},                                    {{0}},                          4,      13,     100,        0,          0,                  HORDE_MACHINE_CAPTIVE | HORDE_LEADER_CAPTIVE},
@@ -2346,7 +2348,7 @@ const itemTable weaponTable[NUMBER_WEAPON_KINDS] = {
 
     {"whip",                "", "", 10, 440,        14, {3, 5,  1},     true, false, "The lash from this coil of braided leather can tear bark from trees, and it will reach opponents up to five spaces away."},
     {"rapier",              "", "", 10, 440,        15, {3, 5,  1},     true, false, "This blade is thin and flexible, designed for deft and rapid maneuvers. It inflicts less damage than comparable weapons, but permits you to attack twice as quickly. If there is one space between you and an enemy and you step directly toward it, you will perform a devastating lunge attack, which deals treble damage and never misses."},
-    {"flail",               "", "", 10, 440,        17, {10,13, 1},     true, false, "This spiked iron ball can be whirled at the end of its chain in synchronicity with your movement, allowing you a free attack whenever moving between two spaces that are adjacent to an enemy."},
+    {"flail",               "", "", 10, 440,        17, {9, 15, 1},     true, false, "This spiked iron ball can be whirled at the end of its chain in synchronicity with your movement, allowing you a free attack whenever moving between two spaces that are adjacent to an enemy."},
 
     {"mace",                "", "", 10, 660,        16, {16, 20, 1},    true, false, "The iron flanges at the head of this weapon inflict substantial damage with every weighty blow. Because of its heft, it takes an extra turn to recover when it hits, and will push your opponent backward if there is room."},
     {"war hammer",          "", "", 10, 1100,       20, {25, 35, 1},    true, false, "Few creatures can withstand the crushing blow of this towering mass of lead and steel, but only the strongest of adventurers can effectively wield it. Because of its heft, it takes an extra turn to recover when it hits, and will push your opponent backward if there is room."},
@@ -2443,7 +2445,7 @@ itemTable wandTable[NUMBER_WAND_KINDS] = {
     {"beckoning",       itemMetals[5], "",  3,  500,    BOLT_BECKONING,     {2,4,1}, false, false, "The force of this wand will draw the targeted creature into direct proximity."},
     {"plenty",          itemMetals[6], "",  2,  700,    BOLT_PLENTY,        {1,2,1}, false, false, "The creature at the other end of this wand, friend or foe, will be beside itself -- literally! This mischievous cloning magic splits the body and life essence of its target into two. Both the creature and its clone will be weaker than the original."},
     {"invisibility",    itemMetals[7], "",  3,  100,    BOLT_INVISIBILITY,  {3,5,1}, false, false, "This wand will render a creature temporarily invisible to the naked eye. Only with telepathy or in the silhouette of a thick gas will an observer discern the creature's hazy outline."},
-    {"empowerment",     itemMetals[8], "",  1,  100,    BOLT_EMPOWERMENT,   {1,1,1}, false, false, "This sacred magic will permanently improve the mind and body of any monster it hits. A wise adventurer will use it on allies, making them stronger in combat and able to learn a new talent from a fallen foe. If the bolt is reflected back at you, it will have no effect."},
+    {"empowerment",     itemMetals[8], "",  2,  100,    BOLT_EMPOWERMENT,   {1,1,1}, false, false, "This sacred magic will permanently improve the mind and body of any monster it hits. A wise adventurer will use it on allies, making them stronger in combat and able to learn a new talent from a fallen foe. If the bolt is reflected back at you, it will have no effect."},
 };
 
 itemTable staffTable[NUMBER_STAFF_KINDS] = {
@@ -2531,9 +2533,10 @@ const feat featTable[FEAT_COUNT] = {
     {"Specialist",      "Enchant an item up to or above +16.", false},
     {"Jellymancer",     "Obtain at least 90 jelly allies simultaneously.", false},
     {"Indomitable",     "Ascend without taking damage.", true},
-    {"Mystic",          "Ascend without eating.", true},
+    {"Ascetic",         "Ascend without eating.", true},
     {"Dragonslayer",    "Kill a dragon with a melee attack.", false},
     {"Paladin",         "Ascend without attacking an unaware or fleeing creature.", true},
+    {"Untempted",       "Ascend without picking up gold.", true},
 };
 
 const char monsterBehaviorFlagDescriptions[32][COLS] = {

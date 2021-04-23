@@ -118,7 +118,10 @@ typedef long long fixpt;
 #define DATE_FORMAT             "%Y-%m-%d" // see strftime() documentation
 
 #define MESSAGE_LINES           3
-#define MESSAGE_ARCHIVE_LINES   ROWS
+#define MESSAGE_ARCHIVE_VIEW_LINES ROWS
+#define MESSAGE_ARCHIVE_LINES   (MESSAGE_ARCHIVE_VIEW_LINES*10)
+#define MESSAGE_ARCHIVE_ENTRIES (MESSAGE_ARCHIVE_LINES*4)
+#define MAX_MESSAGE_REPEATS     100
 
 // Size of the entire terminal window. These need to be hard-coded here and in Viewport.h
 #define COLS                    100
@@ -1124,6 +1127,7 @@ enum tileFlags {
 #define THROW_KEY           't'
 #define RETHROW_KEY         'T'
 #define RELABEL_KEY         'R'
+#define SWAP_KEY            'w'
 #define TRUE_COLORS_KEY     '\\'
 #define AGGRO_DISPLAY_KEY   ']'
 #define DROP_KEY            'd'
@@ -2209,9 +2213,10 @@ enum featTypes {
     FEAT_SPECIALIST,
     FEAT_JELLYMANCER,
     FEAT_INDOMITABLE,
-    FEAT_MYSTIC,
+    FEAT_ASCETIC,
     FEAT_DRAGONSLAYER,
     FEAT_PALADIN,
+    FEAT_TONE,
 
     FEAT_COUNT,
 };
@@ -2258,6 +2263,8 @@ typedef struct playerCharacter {
     item *armor;
     item *ringLeft;
     item *ringRight;
+    item *swappedIn;
+    item *swappedOut;
 
     flare **flares;
     short flareCount;
@@ -2615,6 +2622,19 @@ typedef struct buttonState {
     cellDisplayBuffer rbuf[COLS][ROWS]; // Reversion screen state.
 } buttonState;
 
+enum messageFlags {
+    REQUIRE_ACKNOWLEDGMENT        = Fl(0),
+    REFRESH_SIDEBAR               = Fl(1),
+    FOLDABLE                      = Fl(2),
+};
+
+typedef struct archivedMessage {
+    char message[COLS*2];
+    unsigned char count;          // how many times this message appears
+    unsigned long turn;           // player turn of the first occurrence
+    enum messageFlags flags;
+} archivedMessage;
+
 extern boolean serverMode;
 extern boolean hasGraphics;
 extern enum graphicsModes graphicsMode;
@@ -2867,11 +2887,14 @@ extern "C" {
     void playerTurnEnded();
     void resetScentTurnNumber();
     void displayMonsterFlashes(boolean flashingEnabled);
+    void clearMessageArchive();
+    void formatRecentMessages(char buf[][COLS*2], size_t height, short *linesFormatted, short *latestMessageLines);
+    void displayRecentMessages();
     void displayMessageArchive();
-    void temporaryMessage(char *msg1, boolean requireAcknowledgment);
-    void messageWithColor(char *msg, color *theColor, boolean requireAcknowledgment);
+    void temporaryMessage(const char *msg1, enum messageFlags flags);
+    void messageWithColor(char *msg, color *theColor, enum messageFlags flags);
     void flavorMessage(char *msg);
-    void message(const char *msg, boolean requireAcknowledgment);
+    void message(const char *msg, enum messageFlags flags);
     void displayMoreSignWithoutWaitingForAcknowledgment();
     void displayMoreSign();
     short encodeMessageColor(char *msg, short i, const color *theColor);
@@ -3036,7 +3059,7 @@ extern "C" {
     short displayedArmorValue();
     void strengthCheck(item *theItem);
     void recalculateEquipmentBonuses();
-    void equipItem(item *theItem, boolean force);
+    boolean equipItem(item *theItem, boolean force, item *unequipHint);
     void equip(item *theItem);
     item *keyInPackFor(short x, short y);
     item *keyOnTileAt(short x, short y);
@@ -3092,6 +3115,7 @@ extern "C" {
     void makeMonsterDropItem(creature *monst);
     void throwCommand(item *theItem, boolean autoThrow);
     void relabel(item *theItem);
+    void swapLastEquipment();
     void apply(item *theItem, boolean recordCommands);
     boolean itemCanBeCalled(item *theItem);
     void call(item *theItem);
@@ -3112,7 +3136,7 @@ extern "C" {
                               char *prompt,
                               boolean allowInventoryActions);
     item *itemOfPackLetter(char letter);
-    void unequipItem(item *theItem, boolean force);
+    boolean unequipItem(item *theItem, boolean force);
     short magicCharDiscoverySuffix(short category, short kind);
     int itemMagicPolarity(item *theItem);
     item *itemAtLoc(short x, short y);

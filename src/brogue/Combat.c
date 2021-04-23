@@ -210,7 +210,7 @@ void splitMonster(creature *monst, short x, short y) {
 //    DEBUG {
 //        hiliteCharGrid(eligibleGrid, &green, 75);
 //        hiliteCharGrid(monsterGrid, &blue, 75);
-//        temporaryMessage("Jelly spawn possibilities (green = eligible, blue = monster):", true);
+//        temporaryMessage("Jelly spawn possibilities (green = eligible, blue = monster):", REQUIRE_ACKNOWLEDGMENT);
 //        displayLevel();
 //    }
 
@@ -255,7 +255,7 @@ void splitMonster(creature *monst, short x, short y) {
 
                     if (canDirectlySeeMonster(monst)) {
                         sprintf(buf, "%s splits in two!", monstName);
-                        message(buf, false);
+                        message(buf, 0);
                     }
 
                     return;
@@ -390,10 +390,10 @@ void specialHit(creature *attacker, creature *defender, short damage) {
             && (rogue.armor->enchant1 + rogue.armor->armor/10 > -10)) {
 
             rogue.armor->enchant1--;
-            equipItem(rogue.armor, true);
+            equipItem(rogue.armor, true, NULL);
             itemName(rogue.armor, buf2, false, false, NULL);
             sprintf(buf, "your %s weakens!", buf2);
-            messageWithColor(buf, &itemMessageColor, false);
+            messageWithColor(buf, &itemMessageColor, 0);
             checkForDisenchantment(rogue.armor);
         }
         if (attacker->info.abilityFlags & MA_HIT_HALLUCINATE) {
@@ -448,6 +448,10 @@ void specialHit(creature *attacker, creature *defender, short damage) {
                         itemFromTopOfStack->quantity = stolenQuantity;
                         theItem = itemFromTopOfStack; // Redirect pointer.
                     } else {
+                        if (rogue.swappedIn == theItem || rogue.swappedOut == theItem) {
+                            rogue.swappedIn = NULL;
+                            rogue.swappedOut = NULL;
+                        }
                         removeItemFromChain(theItem, packItems);
                     }
                     theItem->flags &= ~ITEM_PLAYER_AVOIDS; // Explore will seek the item out if it ends up on the floor again.
@@ -457,7 +461,7 @@ void specialHit(creature *attacker, creature *defender, short damage) {
                     monsterName(buf2, attacker, true);
                     itemName(theItem, buf3, false, true, NULL);
                     sprintf(buf, "%s stole %s!", buf2, buf3);
-                    messageWithColor(buf, &badMessageColor, false);
+                    messageWithColor(buf, &badMessageColor, 0);
                 }
             }
         }
@@ -714,7 +718,7 @@ void magicWeaponHit(creature *defender, item *theItem, boolean backstabbed) {
                 }
                 updateVision(true);
 
-                message(buf, false);
+                message(buf, 0);
                 autoID = true;
                 break;
             case W_SLOWING:
@@ -927,7 +931,7 @@ void applyArmorRunicEffect(char returnString[DCOLS], creature *attacker, short *
             if (rand_percent(10)) {
                 rogue.armor->strengthRequired++;
                 sprintf(returnString, "your %s suddenly feels heavier!", armorName);
-                equipItem(rogue.armor, true);
+                equipItem(rogue.armor, true, NULL);
                 runicDiscovered = true;
             }
             break;
@@ -941,7 +945,7 @@ void applyArmorRunicEffect(char returnString[DCOLS], creature *attacker, short *
         case A_IMMOLATION:
             if (rand_percent(10)) {
                 sprintf(returnString, "flames suddenly explode out of your %s!", armorName);
-                message(returnString, !runicKnown);
+                message(returnString, runicKnown ? 0 : REQUIRE_ACKNOWLEDGMENT);
                 returnString[0] = '\0';
                 spawnDungeonFeature(player.xLoc, player.yLoc, &(dungeonFeatureCatalog[DF_ARMOR_IMMOLATION]), true, false);
                 runicDiscovered = true;
@@ -964,10 +968,10 @@ void decrementWeaponAutoIDTimer() {
 
         rogue.weapon->flags |= ITEM_IDENTIFIED;
         updateIdentifiableItems();
-        messageWithColor("you are now familiar enough with your weapon to identify it.", &itemMessageColor, false);
+        messageWithColor("you are now familiar enough with your weapon to identify it.", &itemMessageColor, 0);
         itemName(rogue.weapon, buf2, true, true, NULL);
         sprintf(buf, "%s %s.", (rogue.weapon->quantity > 1 ? "they are" : "it is"), buf2);
-        messageWithColor(buf, &itemMessageColor, false);
+        messageWithColor(buf, &itemMessageColor, 0);
     }
 }
 
@@ -1057,7 +1061,7 @@ boolean attack(creature *attacker, creature *defender, boolean lungeAttack) {
         defender->bookkeepingFlags |= MB_SEIZED;
         if (canSeeMonster(attacker) || canSeeMonster(defender)) {
             sprintf(buf, "%s seizes %s!", attackerName, (defender == &player ? "your legs" : defenderName));
-            messageWithColor(buf, &white, false);
+            messageWithColor(buf, &white, 0);
         }
         return false;
     }
@@ -1182,7 +1186,7 @@ boolean attack(creature *attacker, creature *defender, boolean lungeAttack) {
                 specialHit(attacker, defender, (attacker->info.abilityFlags & MA_POISONS) ? poisonDamage : damage);
             }
             if (armorRunicString[0]) {
-                message(armorRunicString, false);
+                message(armorRunicString, 0);
                 if (rogue.armor && (rogue.armor->flags & ITEM_RUNIC) && rogue.armor->enchant2 == A_BURDEN) {
                     strengthCheck(rogue.armor);
                 }
@@ -1214,10 +1218,10 @@ boolean attack(creature *attacker, creature *defender, boolean lungeAttack) {
             if (rogue.weapon->quiverNumber) {
                 rogue.weapon->quiverNumber = rand_range(1, 60000);
             }
-            equipItem(rogue.weapon, true);
+            equipItem(rogue.weapon, true, NULL);
             itemName(rogue.weapon, buf2, false, false, NULL);
             sprintf(buf, "your %s weakens!", buf2);
-            messageWithColor(buf, &itemMessageColor, false);
+            messageWithColor(buf, &itemMessageColor, 0);
             checkForDisenchantment(rogue.weapon);
         }
 
@@ -1254,7 +1258,10 @@ short strLenWithoutEscapes(const char *str) {
     return count;
 }
 
+// Buffer messages generated by combat until flushed by displayCombatText().
+// Messages in the buffer are delimited by newlines.
 void combatMessage(char *theMsg, color *theColor) {
+    short length;
     char newMsg[COLS * 2];
 
     if (theColor == 0) {
@@ -1265,28 +1272,53 @@ void combatMessage(char *theMsg, color *theColor) {
     encodeMessageColor(newMsg, 0, theColor);
     strcat(newMsg, theMsg);
 
-    if (strLenWithoutEscapes(combatText) + strLenWithoutEscapes(newMsg) + 3 > DCOLS) {
-        // the "3" is for the semicolon, space and period that get added to conjoined combat texts.
+    length = strlen(combatText);
+
+    // Buffer combat messages here just for timing; otherwise player combat
+    // messages appear after monsters, rather than before.  The -2 is for the
+    // newline and terminator.
+    if (length + strlen(newMsg) > COLS * 2 - 2) {
         displayCombatText();
     }
 
     if (combatText[0]) {
-        strcat(combatText, "; ");
-        strcat(combatText, newMsg);
+        snprintf(&combatText[length], COLS * 2 - length, "\n%s", newMsg);
     } else {
         strcpy(combatText, newMsg);
     }
 }
 
+// Flush any buffered, newline-delimited combat messages, passing each to
+// message().  These messages are "foldable", meaning that if space permits
+// they may be joined together by semi-colons.  Notice that combat messages may
+// be flushed by a number of different callers.  One is message() itself
+// creating a recursion, which this function is responsible for terminating.
 void displayCombatText() {
-    char buf[COLS];
+    char buf[COLS * 2];
+    char *start, *end;
 
-    if (combatText[0]) {
-        sprintf(buf, "%s.", combatText);
-        combatText[0] = '\0';
-        message(buf, rogue.cautiousMode);
-        rogue.cautiousMode = false;
+    // message itself will call displayCombatText.  For this guard to terminate
+    // the recursion, we need to copy combatText out and empty it before
+    // calling message.
+    if (combatText[0] == '\0') {
+        return;
     }
+
+    strcpy(buf, combatText);
+    combatText[0] = '\0';
+
+    start = buf;
+    for (end = start; *end != '\0'; end++) {
+        if (*end == '\n') {
+            *end = '\0';
+            message(start, FOLDABLE | (rogue.cautiousMode ? REQUIRE_ACKNOWLEDGMENT : 0));
+            start = end + 1;
+        }
+    }
+
+    message(start, FOLDABLE | (rogue.cautiousMode ? REQUIRE_ACKNOWLEDGMENT : 0));
+
+    rogue.cautiousMode = false;
 }
 
 void flashMonster(creature *monst, const color *theColor, short strength) {
@@ -1612,7 +1644,7 @@ void killCreature(creature *decedent, boolean administrativeDeath) {
             monsterName(monstName, decedent, true);
             snprintf(buf, DCOLS * 3, "%s %s", monstName, monsterText[decedent->info.monsterID].DFMessage);
             resolvePronounEscapes(buf, decedent);
-            message(buf, false);
+            message(buf, 0);
         }
     }
 
@@ -1626,7 +1658,7 @@ void killCreature(creature *decedent, boolean administrativeDeath) {
             && !(decedent->bookkeepingFlags & MB_BOUND_TO_LEADER)
             && !decedent->carriedMonster) {
 
-            messageWithColor("you feel a sense of loss.", &badMessageColor, false);
+            messageWithColor("you feel a sense of loss.", &badMessageColor, 0);
         }
         x = decedent->xLoc;
         y = decedent->yLoc;

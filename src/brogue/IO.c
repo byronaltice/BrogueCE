@@ -596,7 +596,7 @@ void mainInputLoop() {
         originLoc[1] = player.yLoc;
 
         if (playingBack && rogue.cursorMode) {
-            temporaryMessage("Examine what? (<hjklyubn>, mouse, or <tab>)", false);
+            temporaryMessage("Examine what? (<hjklyubn>, mouse, or <tab>)", 0);
         }
 
         if (!playingBack
@@ -2259,7 +2259,7 @@ void displayWaypoints() {
             }
         }
     }
-    temporaryMessage("Waypoints:", true);
+    temporaryMessage("Waypoints:", REQUIRE_ACKNOWLEDGMENT);
 }
 
 void displayMachines() {
@@ -2392,9 +2392,9 @@ void exploreKey(const boolean controlKey) {
     }
 
     if (tooDark) {
-        message("It's too dark to explore!", false);
+        message("It's too dark to explore!", 0);
     } else if (x == player.xLoc && y == player.yLoc) {
-        message("I see no path for further exploration.", false);
+        message("I see no path for further exploration.", 0);
     } else if (proposeOrConfirmLocation(finalX, finalY, "I see no path for further exploration.")) {
         explore(controlKey ? 1 : 20); // Do the exploring until interrupted.
         hideCursor();
@@ -2451,7 +2451,7 @@ void nextBrogueEvent(rogueEvent *returnEvent, boolean textInput, boolean colorsD
 
     if (returnEvent->eventType == EVENT_ERROR) {
         rogue.playbackPaused = rogue.playbackMode; // pause if replaying
-        message("Event error!", true);
+        message("Event error!", REQUIRE_ACKNOWLEDGMENT);
     }
 }
 
@@ -2597,16 +2597,19 @@ void executeKeystroke(signed long keystroke, boolean controlKey, boolean shiftKe
         case RELABEL_KEY:
             relabel(NULL);
             break;
+        case SWAP_KEY:
+            swapLastEquipment();
+            break;
         case TRUE_COLORS_KEY:
             rogue.trueColorMode = !rogue.trueColorMode;
             displayLevel();
             refreshSideBar(-1, -1, false);
             if (rogue.trueColorMode) {
                 messageWithColor(KEYBOARD_LABELS ? "Color effects disabled. Press '\\' again to enable." : "Color effects disabled.",
-                                 &teal, false);
+                                 &teal, 0);
             } else {
                 messageWithColor(KEYBOARD_LABELS ? "Color effects enabled. Press '\\' again to disable." : "Color effects enabled.",
-                                 &teal, false);
+                                 &teal, 0);
             }
             break;
         case AGGRO_DISPLAY_KEY:
@@ -2615,10 +2618,10 @@ void executeKeystroke(signed long keystroke, boolean controlKey, boolean shiftKe
             refreshSideBar(-1, -1, false);
             if (rogue.displayAggroRangeMode) {
                 messageWithColor(KEYBOARD_LABELS ? "Stealth range displayed. Press ']' again to hide." : "Stealth range displayed.",
-                                 &teal, false);
+                                 &teal, 0);
             } else {
                 messageWithColor(KEYBOARD_LABELS ? "Stealth range hidden. Press ']' again to display." : "Stealth range hidden.",
-                                 &teal, false);
+                                 &teal, 0);
             }
             break;
         case CALL_KEY:
@@ -2654,7 +2657,7 @@ void executeKeystroke(signed long keystroke, boolean controlKey, boolean shiftKe
                     rogue.nextGame = NG_VIEW_RECORDING;
                     rogue.gameHasEnded = true;
                 } else {
-                    message("File not found.", false);
+                    message("File not found.", 0);
                 }
             }
             break;
@@ -2670,7 +2673,7 @@ void executeKeystroke(signed long keystroke, boolean controlKey, boolean shiftKe
                     rogue.nextGame = NG_OPEN_GAME;
                     rogue.gameHasEnded = true;
                 } else {
-                    message("File not found.", false);
+                    message("File not found.", 0);
                 }
             }
             break;
@@ -2702,17 +2705,17 @@ void executeKeystroke(signed long keystroke, boolean controlKey, boolean shiftKe
                     case TEXT_GRAPHICS:
                         messageWithColor(KEYBOARD_LABELS
                             ? "Switched to text mode. Press 'G' again to enable tiles."
-                            : "Switched to text mode.", &teal, false);
+                            : "Switched to text mode.", &teal, 0);
                         break;
                     case TILES_GRAPHICS:
                         messageWithColor(KEYBOARD_LABELS
                             ? "Switched to graphical tiles. Press 'G' again to enable hybrid mode."
-                            : "Switched to graphical tiles.", &teal, false);
+                            : "Switched to graphical tiles.", &teal, 0);
                         break;
                     case HYBRID_GRAPHICS:
                         messageWithColor(KEYBOARD_LABELS
                             ? "Switched to hybrid mode. Press 'G' again to disable tiles."
-                            : "Switched to hybrid mode.", &teal, false);
+                            : "Switched to hybrid mode.", &teal, 0);
                         break;
                 }
             }
@@ -2795,7 +2798,7 @@ boolean getInputTextString(char *inputText,
         confirmMessages();
         x = mapToWindowX(strLenWithoutEscapes(prompt));
         y = MESSAGE_LINES - 1;
-        message(prompt, false);
+        temporaryMessage(prompt, 0);
         printString(defaultEntry, x, y, &white, &black, 0);
     }
 
@@ -3051,74 +3054,371 @@ void dequeueEvent() {
     nextBrogueEvent(&returnEvent, false, false, true);
 }
 
-void displayMessageArchive() {
-    short i, j, k, reverse, fadePercent, totalMessageCount, currentMessageCount;
-    boolean fastForward;
-    cellDisplayBuffer dbuf[COLS][ROWS], rbuf[COLS][ROWS];
+// Empty the message archive
+void clearMessageArchive() {
+    messageArchivePosition = 0;
+}
 
-    // Count the number of lines in the archive.
-    for (totalMessageCount=0;
-         totalMessageCount < MESSAGE_ARCHIVE_LINES && messageArchive[totalMessageCount][0];
-         totalMessageCount++);
+// Get a pointer to the archivedMessage the given number of entries back in history.
+// Pass zero to get the entry under messageArchivePosition.
+archivedMessage *getArchivedMessage(short back) {
+    return &messageArchive[(messageArchivePosition + MESSAGE_ARCHIVE_ENTRIES - back) % MESSAGE_ARCHIVE_ENTRIES];
+}
 
-    if (totalMessageCount > MESSAGE_LINES) {
+int formatCountedMessage(char *buffer, size_t size, archivedMessage *m) {
+    int length;
 
-        copyDisplayBuffer(rbuf, displayBuffer);
+    if (m->count <= 1) {
+        length = snprintf(buffer, size, "%s", m->message);
+    } else if (m->count >= MAX_MESSAGE_REPEATS) {
+        length = snprintf(buffer, size, "%s (many)", m->message);
+    } else {
+        length = snprintf(buffer, size, "%s (x%d)", m->message, m->count);
+    }
 
-        // Pull-down/pull-up animation:
-        for (reverse = 0; reverse <= 1; reverse++) {
-            fastForward = false;
-            for (currentMessageCount = (reverse ? totalMessageCount : MESSAGE_LINES);
-                 (reverse ? currentMessageCount >= MESSAGE_LINES : currentMessageCount <= totalMessageCount);
-                 currentMessageCount += (reverse ? -1 : 1)) {
+    return length;
+}
 
-                clearDisplayBuffer(dbuf);
+// Select and write one or more recent messages to the buffer for further
+// formatting.  FOLDABLE messages from the same turn are combined, otherwise
+// only one message is taken.
+// If turnOutput is not null, it is filled with the player turn number shared
+// by the chosen messages.
+short foldMessages(char buffer[COLS*20], short offset, unsigned long *turnOutput) {
+    short i, folded, messageLength, lineLength, length;
+    unsigned long turn;
+    char counted[COLS*2];
+    archivedMessage *m;
 
-                // Print the message archive text to the dbuf.
-                for (j=0; j < currentMessageCount && j < ROWS; j++) {
-                    printString(messageArchive[(messageArchivePosition - currentMessageCount + MESSAGE_ARCHIVE_LINES + j) % MESSAGE_ARCHIVE_LINES],
-                                mapToWindowX(0), j, &white, &black, dbuf);
-                }
+    folded = 0;
+    m = getArchivedMessage(offset + folded + 1);
+    if (!m->message[0]) {
+        return folded;
+    }
 
-                // Set the dbuf opacity, and do a fade from bottom to top to make it clear that the bottom messages are the most recent.
-                for (j=0; j < currentMessageCount && j<ROWS; j++) {
-                    fadePercent = 50 * (j + totalMessageCount - currentMessageCount) / totalMessageCount + 50;
-                    for (i=0; i<DCOLS; i++) {
-                        dbuf[mapToWindowX(i)][j].opacity = INTERFACE_OPACITY;
-                        if (dbuf[mapToWindowX(i)][j].character != ' ') {
-                            for (k=0; k<3; k++) {
-                                dbuf[mapToWindowX(i)][j].foreColorComponents[k] = dbuf[mapToWindowX(i)][j].foreColorComponents[k] * fadePercent / 100;
-                            }
-                        }
-                    }
-                }
+    folded++;
+    turn = m->turn;
+    if (turnOutput) {
+        *turnOutput = turn;
+    }
 
-                // Display.
-                overlayDisplayBuffer(rbuf, 0);
-                overlayDisplayBuffer(dbuf, 0);
+    if (!(m->flags & FOLDABLE)) {
+        formatCountedMessage(buffer, COLS*2, m);
+        return folded;
+    }
 
-                if (!fastForward && pauseBrogue(reverse ? 1 : 2)) {
-                    fastForward = true;
-                    dequeueEvent();
-                    currentMessageCount = (reverse ? MESSAGE_LINES + 1 : totalMessageCount - 1); // skip to the end
-                }
+    // Search back for eligible foldable message.  Only fold messages from the same turn
+    m = getArchivedMessage(offset + folded + 1);
+    while (folded < MESSAGE_ARCHIVE_ENTRIES && m->message[0] && m->flags & FOLDABLE && turn == m->turn) {
+        folded++;
+        m = getArchivedMessage(offset + folded + 1);
+    }
+
+    lineLength = 0;
+    length = 0;
+    buffer[length] = '\0';
+    for (i = folded; i >= 1; i--) {
+        m = getArchivedMessage(offset + i);
+        formatCountedMessage(counted, COLS*2, m);
+        messageLength = strLenWithoutEscapes(counted);
+
+        if (length == 0) {
+            length = snprintf(buffer, COLS*20, "%s", counted);
+            lineLength = messageLength;
+        } else if (lineLength + 3 + messageLength <= DCOLS) {  // + 3 for semi-colon, space and final period
+            length += snprintf(&buffer[length], COLS*20 - length, "; %s", counted);
+            lineLength += 2 + messageLength;
+        } else {
+            length += snprintf(&buffer[length], COLS*20 - length, ".\n%s", counted);
+            lineLength = messageLength;
+        }
+    }
+
+    snprintf(&buffer[length], COLS*20 - length, ".");
+
+    return folded;
+}
+
+// Change the given newline-delimited sentences in-place to ensure proper writing.
+void capitalizeAndPunctuateSentences(char *text, short length) {
+    short i;
+    boolean newSentence;
+
+    newSentence = true;
+
+    for (i = 0; i + 1 < length && text[i] != '\0' && text[i+1] != '\0'; i++) {
+        if (text[i] == COLOR_ESCAPE) {
+            i += 3; // the loop increment will get the last byte
+        } else if (text[i] == '"'
+                   && (text[i+1] == '.' || text[i+1] == ',')) {
+            // Implement the American quotation mark/period/comma ordering rule.
+            text[i] = text[i+1];
+            text[i+1] = '"';
+        } else if (text[i] == '\n') {
+            newSentence = true;
+        } else if (newSentence) {
+            upperCase(&(text[i]));
+            newSentence = false;
+        }
+    }
+}
+
+// Copy \n-delimited lines to the given buffer.  Carry colors across line breaks.
+void splitLines(short lines, char wrapped[COLS*20], char buffer[][COLS*2], short bufferCursor) {
+    short linesSeen;
+    char color[5], line[COLS*2];
+    char *start, *end;
+
+    start = &(wrapped[0]);
+    color[0] = '\0';
+    line[0] = '\0';
+
+    for (end = start, linesSeen = 0; *end; end++) {
+        if (*end == COLOR_ESCAPE) {
+            strncpy(color, end, 4);
+            color[4] = '\0';
+            end += 4;
+        } else if (*end == '\n') {
+            *end = '\0';
+
+            if (bufferCursor + 1 - lines + linesSeen >= 0) {
+                strncpy(line, color, 5);
+                strncat(line, start, COLS*2 - strlen(line) - 1);
+                line[COLS*2-1] = '\0';
+                strncpy(buffer[bufferCursor + 1 - lines + linesSeen], line, COLS*2);
+                line[0] = '\0';
             }
 
-            if (!reverse) {
-                displayMoreSign();
+            linesSeen++;
+            start = end + 1;
+        }
+    }
+
+    strncpy(line, color, 5);
+    strncat(line, start, COLS*2 - strlen(line) - 1);
+    line[COLS*2-1] = '\0';
+    strncpy(buffer[bufferCursor], line, COLS*2);
+}
+
+// Fill the buffer of height lines with archived messages.  Fill from the
+// bottom, so that the most recent message appears in the last line of buffer.
+// linesFormatted, if not null, is filled with the number of formatted lines
+// (rows of buffer filled)
+// latestMessageLines, if not null, is filled with the number of formatted
+// lines generated by events from the current player turn.
+void formatRecentMessages(char buffer[][COLS*2], size_t height, short *linesFormatted, short *latestMessageLines) {
+    short lines, bufferCursor, messagesFolded, messagesFormatted;
+    unsigned long turn;
+    char folded[COLS*20], wrapped[COLS*20];
+
+    bufferCursor = height - 1;
+    messagesFormatted = 0;
+
+    if (latestMessageLines) {
+        *latestMessageLines = 0;
+    }
+
+    while (bufferCursor >= 0 && messagesFormatted < MESSAGE_ARCHIVE_ENTRIES) {
+        messagesFolded = foldMessages(folded, messagesFormatted, &turn);
+        if (messagesFolded == 0) {
+            break;
+        }
+
+        capitalizeAndPunctuateSentences(folded, COLS*20);
+        lines = wrapText(wrapped, folded, DCOLS);
+        splitLines(lines, wrapped, buffer, bufferCursor);
+
+        if (latestMessageLines && turn == rogue.playerTurnNumber) {
+            *latestMessageLines += lines;
+        }
+
+        bufferCursor -= lines;
+        messagesFormatted += messagesFolded;
+    }
+
+    if (linesFormatted) {
+        *linesFormatted = height - 1 - bufferCursor;
+    }
+
+    while (bufferCursor >= 0) {
+        buffer[bufferCursor--][0] = '\0';
+    }
+}
+
+// Display recent archived messages after recalculating message confirmations.
+void displayRecentMessages() {
+    short i;
+    char messageBuffer[MESSAGE_LINES][COLS*2];
+
+    formatRecentMessages(messageBuffer, MESSAGE_LINES, 0, &messagesUnconfirmed);
+
+    for (i = 0; i < MESSAGE_LINES; i++) {
+        strcpy(displayedMessage[i], messageBuffer[MESSAGE_LINES - i - 1]);
+    }
+
+    updateMessageDisplay();
+}
+
+// Draw the given formatted messages to the screen:
+// messages: the archived messages after all formatting passes
+// length: the number of rows in messages, filled from the "bottom", (unused rows have lower indexes)
+// offset: index of oldest (visually highest) message to draw
+// height: height in rows of the message archive display area
+// rbuf: background display buffer to draw against
+void drawMessageArchive(char messages[MESSAGE_ARCHIVE_LINES][COLS*2], short length, short offset, short height, cellDisplayBuffer rbuf[COLS][ROWS]) {
+    int i, j, k, fadePercent;
+    cellDisplayBuffer dbuf[COLS][ROWS];
+
+    clearDisplayBuffer(dbuf);
+
+    for (i = 0; (MESSAGE_ARCHIVE_LINES - offset + i) < MESSAGE_ARCHIVE_LINES && i < ROWS && i < height; i++) {
+        printString(messages[MESSAGE_ARCHIVE_LINES - offset + i], mapToWindowX(0), i, &white, &black, dbuf);
+
+        // Set the dbuf opacity, and do a fade from bottom to top to make it clear that the bottom messages are the most recent.
+        fadePercent = 50 * (length - offset + i) / length + 50;
+        for (j = 0; j < DCOLS; j++) {
+            dbuf[mapToWindowX(j)][i].opacity = INTERFACE_OPACITY;
+            if (dbuf[mapToWindowX(j)][i].character != ' ') {
+                for (k=0; k<3; k++) {
+                    dbuf[mapToWindowX(j)][i].foreColorComponents[k] = dbuf[mapToWindowX(j)][i].foreColorComponents[k] * fadePercent / 100;
+                }
             }
         }
-        overlayDisplayBuffer(rbuf, 0);
-        updateFlavorText();
-        confirmMessages();
-        updateMessageDisplay();
     }
+
+    overlayDisplayBuffer(rbuf, 0);
+    overlayDisplayBuffer(dbuf, 0);
+}
+
+// Pull-down/pull-up animation.
+// open: the desired state of the archived message display.  True when expanding, false when collapsing.
+// messages: the archived messages after all formatting passes
+// length: the number of rows in messages, filled from the "bottom", (unused rows have lower indexes)
+// offset: index of oldest (visually highest) message to draw in the fully expanded state
+// height: height in rows of the message archive display area in the fully expanded state
+// rbuf: background display buffer to draw against
+void animateMessageArchive(boolean opening, char messages[MESSAGE_ARCHIVE_LINES][COLS*2], short length, short offset, short height, cellDisplayBuffer rbuf[COLS][ROWS]) {
+    short i;
+    boolean fastForward;
+
+    fastForward = false;
+
+    for (i = (opening ? MESSAGE_LINES : height);
+         (opening ? i <= height : i >= MESSAGE_LINES);
+         i += (opening ? 1 : -1)) {
+
+        drawMessageArchive(messages, length, offset - height + i, i, rbuf);
+
+        if (!fastForward && pauseBrogue(opening ? 2 : 1)) {
+            fastForward = true;
+            dequeueEvent();
+            i = (opening ? height - 1 : MESSAGE_LINES + 1); // skip to the end
+        }
+    }
+}
+
+// Accept keyboard input to navigate or dismiss the opened message archive
+// messages: the archived messages after all formatting passes
+// length: the number of rows in messages, filled from the "bottom", (unused rows have lower indexes)
+// offset: index of oldest (visually highest) message to draw
+// height: height in rows of the message archive display area
+// rbuf: background display buffer to draw against
+//
+// returns the new offset, which can change if the player scrolled around before closing
+short scrollMessageArchive(char messages[MESSAGE_ARCHIVE_LINES][COLS*2], short length, short offset, short height, cellDisplayBuffer rbuf[COLS][ROWS]) {
+    short lastOffset;
+    boolean exit;
+    rogueEvent theEvent;
+    signed long keystroke;
+
+    if (rogue.autoPlayingLevel || (rogue.playbackMode && !rogue.playbackOOS)) {
+        return offset;
+    }
+
+    exit = false;
+    do {
+        lastOffset = offset;
+        nextBrogueEvent(&theEvent, false, false, false);
+
+        if (theEvent.eventType == KEYSTROKE) {
+            keystroke = theEvent.param1;
+            stripShiftFromMovementKeystroke(&keystroke);
+
+            switch (keystroke) {
+                case UP_KEY:
+                case UP_ARROW:
+                case NUMPAD_8:
+                    if (theEvent.controlKey) {
+                        offset = length;
+                    } else if (theEvent.shiftKey) {
+                        offset++;
+                    } else {
+                        offset += MESSAGE_ARCHIVE_VIEW_LINES / 3;
+                    }
+                    break;
+                case DOWN_KEY:
+                case DOWN_ARROW:
+                case NUMPAD_2:
+                    if (theEvent.controlKey) {
+                        offset = height;
+                    } else if (theEvent.shiftKey) {
+                        offset--;
+                    } else {
+                        offset -= MESSAGE_ARCHIVE_VIEW_LINES / 3;
+                    }
+                    break;
+                case ACKNOWLEDGE_KEY:
+                case ESCAPE_KEY:
+                    exit = true;
+                    break;
+                default:
+                    flashTemporaryAlert(" -- Press space or click to continue -- ", 500);
+            }
+        }
+
+        if (theEvent.eventType == MOUSE_UP) {
+            exit = true;
+        }
+
+        offset = max(height, min(offset, length));
+        if (offset != lastOffset) {
+            drawMessageArchive(messages, length, offset, height, rbuf);
+        }
+    } while (!exit);
+
+    return offset;
+}
+
+void displayMessageArchive() {
+    short length, offset, height;
+    cellDisplayBuffer rbuf[COLS][ROWS];
+    char messageBuffer[MESSAGE_ARCHIVE_LINES][COLS*2];
+
+    formatRecentMessages(messageBuffer, MESSAGE_ARCHIVE_LINES, &length, 0);
+
+    if (length <= MESSAGE_LINES) {
+        return;
+    }
+
+    height = min(length, MESSAGE_ARCHIVE_VIEW_LINES);
+    offset = height;
+
+    copyDisplayBuffer(rbuf, displayBuffer);
+
+    animateMessageArchive(true, messageBuffer, length, offset, height, rbuf);
+    offset = scrollMessageArchive(messageBuffer, length, offset, height, rbuf);
+    animateMessageArchive(false, messageBuffer, length, offset, height, rbuf);
+
+    overlayDisplayBuffer(rbuf, 0);
+    updateFlavorText();
+    confirmMessages();
+    updateMessageDisplay();
 }
 
 // Clears the message area and prints the given message in the area.
 // It will disappear when messages are refreshed and will not be archived.
 // This is primarily used to display prompts.
-void temporaryMessage(char *msg, boolean requireAcknowledgment) {
+void temporaryMessage(const char *msg, enum messageFlags flags) {
     char message[COLS];
     short i, j;
 
@@ -3129,7 +3429,9 @@ void temporaryMessage(char *msg, boolean requireAcknowledgment) {
         upperCase(&(message[i]));
     }
 
-    refreshSideBar(-1, -1, false);
+    if (flags & REFRESH_SIDEBAR) {
+        refreshSideBar(-1, -1, false);
+    }
 
     for (i=0; i<MESSAGE_LINES; i++) {
         for (j=0; j<DCOLS; j++) {
@@ -3137,21 +3439,21 @@ void temporaryMessage(char *msg, boolean requireAcknowledgment) {
         }
     }
     printString(message, mapToWindowX(0), mapToWindowY(-1), &white, &black, 0);
-    if (requireAcknowledgment) {
+    if (flags & REQUIRE_ACKNOWLEDGMENT) {
         waitForAcknowledgment();
         updateMessageDisplay();
     }
     restoreRNG;
 }
 
-void messageWithColor(char *msg, color *theColor, boolean requireAcknowledgment) {
+void messageWithColor(char *msg, color *theColor, enum messageFlags flags) {
     char buf[COLS*2] = "";
     short i;
 
     i=0;
     i = encodeMessageColor(buf, i, theColor);
     strcpy(&(buf[i]), msg);
-    message(buf, requireAcknowledgment);
+    message(buf, flags);
 }
 
 void flavorMessage(char *msg) {
@@ -3172,36 +3474,72 @@ void flavorMessage(char *msg) {
     }
 }
 
-void messageWithoutCaps(char *msg, boolean requireAcknowledgment) {
+// Insert or collapse a new message into the archive and redraw the recent
+// message display.  An incoming message may "collapse" into another (be
+// dropped in favor of bumping a repetition count) if the two have identical
+// content and one of two other conditions is met.  First, if the two messages
+// arrived on the same turn, they may collapse.  Alternately, they may collapse
+// if the older message is the latest one in the archive and the new one is not
+// semi-colon foldable (such as a combat message.)
+void message(const char *msg, enum messageFlags flags) {
     short i;
-    if (!msg[0]) {
+    archivedMessage *archiveEntry;
+    boolean newMessage;
+
+    if (msg == NULL || !msg[0]) {
         return;
     }
 
-    // need to confirm the oldest message? (Disabled!)
-    /*if (!messageConfirmed[MESSAGE_LINES - 1]) {
-        //refreshSideBar(-1, -1, false);
-        displayMoreSign();
-        for (i=0; i<MESSAGE_LINES; i++) {
-            messageConfirmed[i] = true;
-        }
-    }*/
+    assureCosmeticRNG;
 
-    for (i = MESSAGE_LINES - 1; i >= 1; i--) {
-        messageConfirmed[i] = messageConfirmed[i-1];
-        strcpy(displayedMessage[i], displayedMessage[i-1]);
+    rogue.disturbed = true;
+    if (flags & REQUIRE_ACKNOWLEDGMENT || flags & REFRESH_SIDEBAR) {
+        refreshSideBar(-1, -1, false);
     }
-    messageConfirmed[0] = false;
-    strcpy(displayedMessage[0], msg);
+    displayCombatText();
 
-    // Add the message to the archive.
-    strcpy(messageArchive[messageArchivePosition], msg);
-    messageArchivePosition = (messageArchivePosition + 1) % MESSAGE_ARCHIVE_LINES;
+    // Add the message to the archive, bumping counts for recent duplicates
+    newMessage = true;
 
-    // display the message:
-    updateMessageDisplay();
+    // For each at most MESSAGE_ARCHIVE_ENTRIES - 1 past entries..
+    for (i = 1; i < MESSAGE_ARCHIVE_ENTRIES; i++) {
+        archiveEntry = getArchivedMessage(i);
 
-    if (requireAcknowledgment || rogue.cautiousMode) {
+        // Consider messages that arrived this turn for collapsing.  Also
+        // consider the latest entry (which may be from past turns) if the
+        // incoming message is not semi-colon foldable.
+        if (!((i == 1 && !(flags & FOLDABLE)) || archiveEntry->turn == rogue.playerTurnNumber)) {
+            break;
+        }
+
+        if (strcmp(archiveEntry->message, msg) == 0) {
+            // We found an suitable older message to collapse into.  So we
+            // don't need to add another.  Instead consider the older message
+            // as having happened on the current turn, and bump its count if
+            // not maxxed out.
+            newMessage = false;
+            archiveEntry->turn = rogue.playerTurnNumber;
+            if (archiveEntry->count < MAX_MESSAGE_REPEATS) {
+                archiveEntry->count++;
+            }
+            break;
+        }
+    }
+
+    // We didn't collapse the new message, so initialize and insert a new
+    // archive entry for it instead.
+    if (newMessage) {
+        archiveEntry = &messageArchive[messageArchivePosition];
+        strcpy(archiveEntry->message, msg);
+        archiveEntry->count = 1;
+        archiveEntry->turn = rogue.playerTurnNumber;
+        archiveEntry->flags = flags;
+        messageArchivePosition = (messageArchivePosition + 1) % MESSAGE_ARCHIVE_ENTRIES;
+    }
+
+    displayRecentMessages();
+
+    if ((flags & REQUIRE_ACKNOWLEDGMENT) || rogue.cautiousMode) {
         displayMoreSign();
         confirmMessages();
         rogue.cautiousMode = false;
@@ -3210,57 +3548,13 @@ void messageWithoutCaps(char *msg, boolean requireAcknowledgment) {
     if (rogue.playbackMode) {
         rogue.playbackDelayThisTurn += rogue.playbackDelayPerTurn * 5;
     }
-}
 
-
-void message(const char *msg, boolean requireAcknowledgment) {
-    char text[COLS*20], *msgPtr;
-    short i, lines;
-
-    assureCosmeticRNG;
-
-    rogue.disturbed = true;
-    if (requireAcknowledgment) {
-        refreshSideBar(-1, -1, false);
-    }
-    displayCombatText();
-
-    lines = wrapText(text, msg, DCOLS);
-    msgPtr = &(text[0]);
-
-    // Implement the American quotation mark/period/comma ordering rule.
-    for (i=0; text[i] != '\0' && text[i+1] != '\0'; i++) {
-        if (text[i] == COLOR_ESCAPE) {
-            i += 4;
-        } else if (text[i] == '"'
-                   && (text[i+1] == '.' || text[i+1] == ',')) {
-
-            text[i] = text[i+1];
-            text[i+1] = '"';
-        }
-    }
-
-    for(i=0; text[i] == COLOR_ESCAPE; i+=4);
-    upperCase(&(text[i]));
-
-    if (lines > 1) {
-        for (i=0; text[i] != '\0'; i++) {
-            if (text[i] == '\n') {
-                text[i] = '\0';
-
-                messageWithoutCaps(msgPtr, false);
-                msgPtr = &(text[i+1]);
-            }
-        }
-    }
-
-    messageWithoutCaps(msgPtr, requireAcknowledgment);
     restoreRNG;
 }
 
 // Only used for the "you die..." message, to enable posthumous inventory viewing.
 void displayMoreSignWithoutWaitingForAcknowledgment() {
-    if (strLenWithoutEscapes(displayedMessage[0]) < DCOLS - 8 || messageConfirmed[0]) {
+    if (strLenWithoutEscapes(displayedMessage[0]) < DCOLS - 8 || messagesUnconfirmed > 0) {
         printString("--MORE--", COLS - 8, MESSAGE_LINES-1, &black, &white, 0);
     } else {
         printString("--MORE--", COLS - 8, MESSAGE_LINES, &black, &white, 0);
@@ -3274,7 +3568,7 @@ void displayMoreSign() {
         return;
     }
 
-    if (strLenWithoutEscapes(displayedMessage[0]) < DCOLS - 8 || messageConfirmed[0]) {
+    if (strLenWithoutEscapes(displayedMessage[0]) < DCOLS - 8 || messagesUnconfirmed > 0) {
         printString("--MORE--", COLS - 8, MESSAGE_LINES-1, &black, &white, 0);
         waitForAcknowledgment();
         printString("        ", COLS - 8, MESSAGE_LINES-1, &black, &black, 0);
@@ -3361,7 +3655,7 @@ void updateMessageDisplay() {
     for (i=0; i<MESSAGE_LINES; i++) {
         messageColor = white;
 
-        if (messageConfirmed[i]) {
+        if (i >= messagesUnconfirmed) {
             applyColorAverage(&messageColor, &black, 50);
             applyColorAverage(&messageColor, &black, 75 * i / MESSAGE_LINES);
         }
@@ -3370,7 +3664,7 @@ void updateMessageDisplay() {
 
             while (displayedMessage[i][m] == COLOR_ESCAPE) {
                 m = decodeMessageColor(displayedMessage[i], m, &messageColor); // pulls the message color out and advances m
-                if (messageConfirmed[i]) {
+                if (i >= messagesUnconfirmed) {
                     applyColorAverage(&messageColor, &black, 50);
                     applyColorAverage(&messageColor, &black, 75 * i / MESSAGE_LINES);
                 }
@@ -3396,10 +3690,7 @@ void deleteMessages() {
 }
 
 void confirmMessages() {
-    short i;
-    for (i=0; i<MESSAGE_LINES; i++) {
-        messageConfirmed[i] = true;
-    }
+    messagesUnconfirmed = 0;
     updateMessageDisplay();
 }
 
@@ -3826,33 +4117,33 @@ void printHelpScreen() {
         "",
         "          -- Commands --",
         "",
-        "         mouse  ****move cursor (including to examine monsters and terrain)",
-        "         click  ****travel",
-        " control-click  ****advance one space",
-        "      <return>  ****enable keyboard cursor control",
-        "   <space/esc>  ****disable keyboard cursor control",
+        "          mouse  ****move cursor (including to examine monsters and terrain)",
+        "          click  ****travel",
+        "  control-click  ****advance one space",
+        "       <return>  ****enable keyboard cursor control",
+        "    <space/esc>  ****disable keyboard cursor control",
         "hjklyubn, arrow keys, or numpad  ****move or attack (control or shift to run)",
         "",
-        " a/e/r/t/d/c/R  ****apply/equip/remove/throw/drop/call/relabel an item",
-        "             T  ****re-throw last item at last monster",
-        "i, right-click  ****view inventory",
-        "             D  ****list discovered items",
+        "a/e/r/t/d/c/R/w  ****apply/equip/remove/throw/drop/call/relabel/swap an item",
+        "              T  ****re-throw last item at last monster",
+        " i, right-click  ****view inventory",
+        "              D  ****list discovered items",
         "",
-        "             z  ****rest once",
-        "             Z  ****rest for 100 turns or until something happens",
-        "             s  ****search for secrets (control-s: long search)",
-        "          <, >  ****travel to stairs",
-        "             x  ****auto-explore (control-x: fast forward)",
-        "             A  ****autopilot (control-A: fast forward)",
-        "             M  ****display old messages",
-        "             G  ****toggle graphical tiles (when available)",
+        "              z  ****rest once",
+        "              Z  ****rest for 100 turns or until something happens",
+        "              s  ****search for secrets (control-s: long search)",
+        "           <, >  ****travel to stairs",
+        "              x  ****auto-explore (control-x: fast forward)",
+        "              A  ****autopilot (control-A: fast forward)",
+        "              M  ****display old messages",
+        "              G  ****toggle graphical tiles (when available)",
         "",
-        "             S  ****suspend game and quit",
-        "             Q  ****quit to title screen",
+        "              S  ****suspend game and quit",
+        "              Q  ****quit to title screen",
         "",
-        "             \\  ****disable/enable color effects",
-        "             ]  ****display/hide stealth range",
-        "   <space/esc>  ****clear message or cancel command",
+        "              \\  ****disable/enable color effects",
+        "              ]  ****display/hide stealth range",
+        "    <space/esc>  ****clear message or cancel command",
         "",
         "        -- press space or click to continue --"
     };
@@ -4185,8 +4476,8 @@ void displayGrid(short **map) {
 
 void printSeed() {
     char buf[COLS];
-    sprintf(buf, "Dungeon seed #%llu; turn #%lu; version %s", (unsigned long long)rogue.seed, rogue.playerTurnNumber, BROGUE_VERSION_STRING);
-    message(buf, false);
+    snprintf(buf, COLS, "Dungeon seed #%llu; turn #%lu; version %s", (unsigned long long)rogue.seed, rogue.playerTurnNumber, BROGUE_VERSION_STRING);
+    message(buf, 0);
 }
 
 void printProgressBar(short x, short y, const char barLabel[COLS], long amtFilled, long amtMax, color *fillColor, boolean dim) {

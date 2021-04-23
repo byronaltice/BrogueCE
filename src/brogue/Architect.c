@@ -348,8 +348,8 @@ void addLoops(short **grid, short minimumPathingDistance) {
                 oppY = y - dirCoords[d][1];
                 if (coordinatesAreInMap(newX, newY)
                     && coordinatesAreInMap(oppX, oppY)
-                    && grid[newX][newY] > 0
-                    && grid[oppX][oppY] > 0) { // If the tile being inspected has floor on both sides,
+                    && grid[newX][newY] == 1
+                    && grid[oppX][oppY] == 1) { // If the tile being inspected has floor on both sides,
 
                     fillGrid(pathMap, 30000);
                     pathMap[newX][newY] = 0;
@@ -367,7 +367,7 @@ void addLoops(short **grid, short minimumPathingDistance) {
         }
     }
     if (D_INSPECT_LEVELGEN) {
-        temporaryMessage("Added secondary connections:", true);
+        temporaryMessage("Added secondary connections:", REQUIRE_ACKNOWLEDGMENT);
     }
     freeGrid(pathMap);
     freeGrid(costMap);
@@ -634,13 +634,21 @@ void expandMachineInterior(char interior[DCOLS][DROWS], short minimumInteriorNei
                             }
                         }
                     }
-                } else if (pmap[i][j].layers[DUNGEON] == DOOR
-                           || pmap[i][j].layers[DUNGEON] == SECRET_DOOR) {
-                    pmap[i][j].layers[DUNGEON] = FLOOR;
                 }
             }
         }
     } while (madeChange);
+    
+    // Clear doors and secret doors out of the interior of the machine.
+    for(i=1; i<DCOLS-1; i++) {
+        for(j=1; j < DROWS-1; j++) {
+            if (interior[i][j]
+                && (pmap[i][j].layers[DUNGEON] == DOOR || pmap[i][j].layers[DUNGEON] == SECRET_DOOR)) {
+                
+                pmap[i][j].layers[DUNGEON] = FLOOR;
+            }
+        }
+    }
 }
 
 boolean fillInteriorForVestibuleMachine(char interior[DCOLS][DROWS], short bp, short originX, short originY) {
@@ -755,7 +763,7 @@ void redesignInterior(char interior[DCOLS][DROWS], short originX, short originY,
                 findReplaceGrid(pathingGrid, -1, -1, 0);
                 hiliteGrid(pathingGrid, &green, 50);
                 plotCharWithColor('X', mapToWindowX(orphanList[n][0]), mapToWindowY(orphanList[n][1]), &black, &orange);
-                temporaryMessage("Orphan detected:", true);
+                temporaryMessage("Orphan detected:", REQUIRE_ACKNOWLEDGMENT);
             }
 
             for (i=0; i<DCOLS; i++) {
@@ -797,7 +805,7 @@ void redesignInterior(char interior[DCOLS][DROWS], short originX, short originY,
                     dumpLevelToScreen();
                     displayGrid(pathingGrid);
                     plotCharWithColor('X', mapToWindowX(i), mapToWindowY(j), &black, &orange);
-                    temporaryMessage("Orphan connecting:", true);
+                    temporaryMessage("Orphan connecting:", REQUIRE_ACKNOWLEDGMENT);
                 }
             }
         }
@@ -960,7 +968,7 @@ boolean buildAMachine(enum machineTypes bp,
                       item *parentSpawnedItems[MACHINES_BUFFER_LENGTH],
                       creature *parentSpawnedMonsters[MACHINES_BUFFER_LENGTH]) {
 
-    short i, j, k, feat, randIndex, totalFreq, instance, instanceCount = 0,
+    short i, j, k, layer, feat, randIndex, totalFreq, instance, instanceCount = 0,
         featX, featY, itemCount, monsterCount, qualifyingTileCount,
         **distanceMap = NULL, distance25, distance75, distanceBound[2],
         personalSpace, failsafe, locationFailsafe,
@@ -1202,6 +1210,12 @@ boolean buildAMachine(enum machineTypes bp,
                 if (pmap[i][j].layers[DUNGEON] == SECRET_DOOR) {
                     pmap[i][j].layers[DUNGEON] = DOOR;
                 }
+                // Clear wired tiles in case we stole them from another machine.
+                for (layer = 0; layer < NUMBER_TERRAIN_LAYERS; layer++) {
+                    if (tileCatalog[pmap[i][j].layers[layer]].mechFlags & (TM_IS_WIRED | TM_IS_CIRCUIT_BREAKER)) {
+                        pmap[i][j].layers[layer] = (layer == DUNGEON ? FLOOR : NOTHING);
+                    }
+                }
             }
         }
     }
@@ -1315,7 +1329,7 @@ boolean buildAMachine(enum machineTypes bp,
             if (D_INSPECT_MACHINES) {
                 dumpLevelToScreen();
                 hiliteCharGrid(p->viewMap, &omniscienceColor, 75);
-                temporaryMessage("Showing visibility.", true);
+                temporaryMessage("Showing visibility.", REQUIRE_ACKNOWLEDGMENT);
             }
         }
 
@@ -1343,7 +1357,7 @@ boolean buildAMachine(enum machineTypes bp,
                 hiliteCharGrid(p->occupied, &red, 75);
                 hiliteCharGrid(p->candidates, &green, 75);
                 hiliteCharGrid(p->interior, &blue, 75);
-                temporaryMessage("Indicating: Occupied (red); Candidates (green); Interior (blue).", true);
+                temporaryMessage("Indicating: Occupied (red); Candidates (green); Interior (blue).", REQUIRE_ACKNOWLEDGMENT);
             }
 
             if (feature->flags & MF_EVERYWHERE & ~MF_BUILD_AT_ORIGIN) {
@@ -1768,7 +1782,7 @@ void runAutogenerators(boolean buildAreaMachines) {
                         if (D_INSPECT_LEVELGEN) {
                             dumpLevelToScreen();
                             hiliteCell(x, y, &yellow, 50, true);
-                            temporaryMessage("Dungeon feature added.", true);
+                            temporaryMessage("Dungeon feature added.", REQUIRE_ACKNOWLEDGMENT);
                         }
                     }
 
@@ -1788,7 +1802,7 @@ void runAutogenerators(boolean buildAreaMachines) {
                             if (D_INSPECT_LEVELGEN) {
                                 dumpLevelToScreen();
                                 hiliteCell(x, y, &yellow, 50, true);
-                                temporaryMessage("Terrain added.", true);
+                                temporaryMessage("Terrain added.", REQUIRE_ACKNOWLEDGMENT);
                             }
                         }
                     }
@@ -1935,7 +1949,7 @@ void designCavern(short **grid, short minWidth, short maxWidth, short minHeight,
 
 //    colorOverDungeon(&darkGray);
 //    hiliteGrid(blobGrid, &tanColor, 80);
-//    temporaryMessage("Here's the cave:", true);
+//    temporaryMessage("Here's the cave:", REQUIRE_ACKNOWLEDGMENT);
 
     // Position the new cave in the middle of the grid...
     destX = (DCOLS - caveWidth) / 2;
@@ -2067,7 +2081,7 @@ void designChunkyRoom(short **grid) {
             maxY = min(DROWS - 2, max(y + 3, maxY));
 
 //            hiliteGrid(grid, &green, 50);
-//            temporaryMessage("Added a chunk:", true);
+//            temporaryMessage("Added a chunk:", REQUIRE_ACKNOWLEDGMENT);
         }
     }
 }
@@ -2115,7 +2129,7 @@ void chooseRandomDoorSites(short **roomMap, short doorSites[4][2]) {
 
 //    colorOverDungeon(&darkGray);
 //    hiliteGrid(grid, &blue, 100);
-//    temporaryMessage("Generating this room:", true);
+//    temporaryMessage("Generating this room:", REQUIRE_ACKNOWLEDGMENT);
 //    const char dirChars[] = "^v<>";
 
     for (i=0; i<DCOLS; i++) {
@@ -2144,7 +2158,7 @@ void chooseRandomDoorSites(short **roomMap, short doorSites[4][2]) {
         }
     }
 
-//    temporaryMessage("Door candidates:", true);
+//    temporaryMessage("Door candidates:", REQUIRE_ACKNOWLEDGMENT);
 
     // Pick four doors, one in each direction, and store them in doorSites[dir].
     for (dir=0; dir<4; dir++) {
@@ -2342,7 +2356,7 @@ void attachRooms(short **grid, const dungeonProfile *theDP, short attempts, shor
             if (doorSites[1][0] != -1) plotCharWithColor('v', mapToWindowX(doorSites[1][0]), mapToWindowY(doorSites[1][1]), &black, &green);
             if (doorSites[2][0] != -1) plotCharWithColor('<', mapToWindowX(doorSites[2][0]), mapToWindowY(doorSites[2][1]), &black, &green);
             if (doorSites[3][0] != -1) plotCharWithColor('>', mapToWindowX(doorSites[3][0]), mapToWindowY(doorSites[3][1]), &black, &green);
-            temporaryMessage("Generating this room:", true);
+            temporaryMessage("Generating this room:", REQUIRE_ACKNOWLEDGMENT);
         }
 
         // Slide hyperspace across real space, in a random but predetermined order, until the room matches up with a wall.
@@ -2365,7 +2379,7 @@ void attachRooms(short **grid, const dungeonProfile *theDP, short attempts, shor
                 grid[x][y] = 2; // Door site.
                 if (D_INSPECT_LEVELGEN) {
                     hiliteGrid(grid, &green, 50);
-                    temporaryMessage("Added room.", true);
+                    temporaryMessage("Added room.", REQUIRE_ACKNOWLEDGMENT);
                 }
                 roomsBuilt++;
                 break;
@@ -2421,14 +2435,14 @@ void carveDungeon(short **grid) {
     if (D_INSPECT_LEVELGEN) {
         colorOverDungeon(&darkGray);
         hiliteGrid(grid, &white, 100);
-        temporaryMessage("First room placed:", true);
+        temporaryMessage("First room placed:", REQUIRE_ACKNOWLEDGMENT);
     }
 
     attachRooms(grid, &theDP, 35, 35);
 
 //    colorOverDungeon(&darkGray);
 //    hiliteGrid(grid, &white, 100);
-//    temporaryMessage("How does this finished level look?", true);
+//    temporaryMessage("How does this finished level look?", REQUIRE_ACKNOWLEDGMENT);
 }
 
 void finishWalls(boolean includingDiagonals) {
@@ -2577,7 +2591,7 @@ boolean lakeDisruptsPassability(short **grid, short **lakeMap, short dungeonToGr
 //                    hiliteGrid(lakeMap, &darkBlue, 75);
 //                    hiliteGrid(floodMap, &white, 20);
 //                    plotCharWithColor('X', mapToWindowX(i), mapToWindowY(j), &black, &red);
-//                    temporaryMessage("Failed here.", true);
+//                    temporaryMessage("Failed here.", REQUIRE_ACKNOWLEDGMENT);
 //                }
 
                 result = true;
@@ -2607,7 +2621,7 @@ void designLakes(short **lakeMap) {
 //        if (D_INSPECT_LEVELGEN) {
 //            colorOverDungeon(&darkGray);
 //            hiliteGrid(grid, &white, 100);
-//            temporaryMessage("Generated a lake.", true);
+//            temporaryMessage("Generated a lake.", REQUIRE_ACKNOWLEDGMENT);
 //        }
 
         for (k=0; k<20; k++) { // placement attempts
@@ -2631,7 +2645,7 @@ void designLakes(short **lakeMap) {
                 if (D_INSPECT_LEVELGEN) {
                     dumpLevelToScreen();
                     hiliteGrid(lakeMap, &white, 50);
-                    temporaryMessage("Added a lake location.", true);
+                    temporaryMessage("Added a lake location.", REQUIRE_ACKNOWLEDGMENT);
                 }
                 break;
             }
@@ -2677,7 +2691,7 @@ void fillLakes(short **lakeMap) {
                 if (D_INSPECT_LEVELGEN) {
                     dumpLevelToScreen();
                     hiliteGrid(lakeMap, &white, 75);
-                    temporaryMessage("Lake filled.", true);
+                    temporaryMessage("Lake filled.", REQUIRE_ACKNOWLEDGMENT);
                 }
             }
         }
@@ -2864,7 +2878,7 @@ void digDungeon() {
 
     if (D_INSPECT_LEVELGEN) {
         dumpLevelToScreen();
-        temporaryMessage("Carved into the granite:", true);
+        temporaryMessage("Carved into the granite:", REQUIRE_ACKNOWLEDGMENT);
     }
     //DEBUG printf("\n%i loops created.", numLoops);
     //DEBUG logLevel();
@@ -2891,7 +2905,7 @@ void digDungeon() {
 
     if (D_INSPECT_LEVELGEN) {
         dumpLevelToScreen();
-        temporaryMessage("Diagonal openings removed.", true);
+        temporaryMessage("Diagonal openings removed.", REQUIRE_ACKNOWLEDGMENT);
     }
 
     // Now add some treasure machines.
@@ -2899,7 +2913,7 @@ void digDungeon() {
 
     if (D_INSPECT_LEVELGEN) {
         dumpLevelToScreen();
-        temporaryMessage("Machines added.", true);
+        temporaryMessage("Machines added.", REQUIRE_ACKNOWLEDGMENT);
     }
 
     // Run the machine autoGenerators.
@@ -2910,7 +2924,7 @@ void digDungeon() {
 
     if (D_INSPECT_LEVELGEN) {
         dumpLevelToScreen();
-        temporaryMessage("Lake boundaries cleaned up.", true);
+        temporaryMessage("Lake boundaries cleaned up.", REQUIRE_ACKNOWLEDGMENT);
     }
 
     // Now add some bridges.
@@ -2918,7 +2932,7 @@ void digDungeon() {
 
     if (D_INSPECT_LEVELGEN) {
         dumpLevelToScreen();
-        temporaryMessage("Bridges added.", true);
+        temporaryMessage("Bridges added.", REQUIRE_ACKNOWLEDGMENT);
     }
 
     // Now remove orphaned doors and upgrade some doors to secret doors
@@ -2929,7 +2943,7 @@ void digDungeon() {
 
     if (D_INSPECT_LEVELGEN) {
         dumpLevelToScreen();
-        temporaryMessage("Finishing touches added. Level has been generated.", true);
+        temporaryMessage("Finishing touches added. Level has been generated.", REQUIRE_ACKNOWLEDGMENT);
     }
 }
 
@@ -3012,7 +3026,7 @@ void setUpWaypoints() {
 //            blackOutScreen();
 //            dumpLevelToScreen();
 //            hiliteCharGrid(grid, &yellow, 50);
-//            temporaryMessage("Waypoint coverage so far:", true);
+//            temporaryMessage("Waypoint coverage so far:", REQUIRE_ACKNOWLEDGMENT);
         }
     }
 
@@ -3021,7 +3035,7 @@ void setUpWaypoints() {
 //        blackOutScreen();
 //        dumpLevelToScreen();
 //        displayGrid(rogue.wpDistance[i]);
-//        temporaryMessage("Waypoint distance map:", true);
+//        temporaryMessage("Waypoint distance map:", REQUIRE_ACKNOWLEDGMENT);
     }
 }
 
@@ -3099,7 +3113,7 @@ short levelIsDisconnectedWithBlockingMap(char blockingMap[DCOLS][DROWS], boolean
 
 //  dumpLevelToScreen();
 //  hiliteCharGrid(blockingMap, &omniscienceColor, 100);
-//  temporaryMessage("Blocking map:", true);
+//  temporaryMessage("Blocking map:", REQUIRE_ACKNOWLEDGMENT);
 
     // Map out the zones with the blocking area blocked.
     for (i=1; i<DCOLS-1; i++) {
@@ -3326,7 +3340,7 @@ boolean spawnDungeonFeature(short x, short y, dungeonFeature *feat, boolean refr
 
     if (feat->description[0] && !feat->messageDisplayed && playerCanSee(x, y)) {
         feat->messageDisplayed = true;
-        message(feat->description, false);
+        message(feat->description, 0);
     }
 
     zeroOutGrid(blockingMap);
@@ -3414,7 +3428,7 @@ boolean spawnDungeonFeature(short x, short y, dungeonFeature *feat, boolean refr
     }
     //  if (succeeded && feat->description[0] && !feat->messageDisplayed && playerCanSee(x, y)) {
     //      feat->messageDisplayed = true;
-    //      message(feat->description, false);
+    //      message(feat->description, 0);
     //  }
     if (succeeded) {
         if (feat->subsequentDF) {
@@ -3645,7 +3659,7 @@ void initializeLevel() {
     if (D_INSPECT_LEVELGEN) {
         dumpLevelToScreen();
         hiliteCharGrid(grid, &teal, 100);
-        temporaryMessage("Stair location candidates:", true);
+        temporaryMessage("Stair location candidates:", REQUIRE_ACKNOWLEDGMENT);
     }
 
     if (getQualifyingGridLocNear(downLoc, levels[n].downStairsLoc[0], levels[n].downStairsLoc[1], grid, false)) {
