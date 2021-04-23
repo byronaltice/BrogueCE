@@ -2191,7 +2191,7 @@ typedef struct creature {
     struct creature *nextCreature;
     struct item *carriedItem;           // only used for monsters
 
-    boolean uiFlash                     // monster needs to be extra visible on the UI this turn, different from flashStrength/flashColor 
+    boolean uiFlash;                    // monster needs to be extra visible on the UI this turn, different from flashStrength/flashColor 
 } creature;
 
 enum NGCommands {
