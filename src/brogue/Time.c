@@ -2462,7 +2462,7 @@ void playerTurnEnded() {
         if (rogue.displayAggroRangeMode) {
             displayLevel();
         }
-
+        extern color hiliteColor;
         for(monst = monsters->nextCreature; monst != NULL; monst = monst->nextCreature) {
             if (canSeeMonster(monst) && !(monst->bookkeepingFlags & (MB_WAS_VISIBLE | MB_ALREADY_SEEN))) {
                 monst->bookkeepingFlags |= MB_WAS_VISIBLE;
@@ -2473,15 +2473,18 @@ void playerTurnEnded() {
                         rogue.RNG = RNG_COSMETIC;
                         //assureCosmeticRNG;
                         monsterName(buf2, monst, false);
+                        // e.g.: "You see a kobold.", "You sense a rat."
                         sprintf(buf, "you %s a%s %s",
                                 playerCanDirectlySee(monst->xLoc, monst->yLoc) ? "see" : "sense",
                                 (isVowelish(buf2) ? "n" : ""),
                                 buf2);
+			monst->uiFlash = false;
                         if (rogue.cautiousMode) {
                             strcat(buf, ".");
                             message(buf, true);
                         } else {
                             combatMessage(buf, 0);
+			    monst->uiFlash = true;
                         }
                         restoreRNG;
                     }
@@ -2521,6 +2524,12 @@ void playerTurnEnded() {
         }
 
         displayCombatText();
+        for(monst = monsters->nextCreature; monst != NULL; monst = monst->nextCreature) {
+	    if(monst->uiFlash) {
+	        highlightCellTemporarily(&hiliteColor, 50, monst->xLoc, monst->yLoc);
+		monst->uiFlash = false;
+            }
+        }
 
         if (player.status[STATUS_PARALYZED]) {
             if (!fastForward) {
