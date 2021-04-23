@@ -2073,6 +2073,27 @@ void flashCell(color *theColor, short frames, short x, short y) {
     refreshDungeonCell(x, y);
 }
 
+void highlightCellTemporarily(color *theColor, short frames, short x, short y) {
+    const short numberOfFlashes = 5;
+    frames = frames - frames % numberOfFlashes;
+    const short framesPerFlash = (frames/numberOfFlashes);
+    
+    enum displayGlyph displayChar;
+    color foreColor, backColor;
+    getCellAppearance(x, y, &displayChar, &foreColor, &backColor);
+    short i;
+    boolean interrupted = false;
+    color theColorIntermediate = *theColor;
+    for (i=0; i<frames && !interrupted; i++) {
+        applyColorScalar(&theColorIntermediate, 100 - ((i % framesPerFlash) * 100 / framesPerFlash));
+        plotCharWithColor(displayChar, mapToWindowX(x), mapToWindowY(y), &foreColor, &theColorIntermediate);
+        theColorIntermediate = *theColor;
+        interrupted = pauseBrogue(30);
+    }
+
+    refreshDungeonCell(x, y);
+}
+
 // special effect expanding flash of light at dungeon coordinates (x, y) restricted to tiles with matching flags
 void colorFlash(const color *theColor, unsigned long reqTerrainFlags,
                 unsigned long reqTileFlags, short frames, short maxRadius, short x, short y) {
